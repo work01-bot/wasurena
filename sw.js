@@ -4,7 +4,7 @@
 // ネットがなくてもそこから表示します。
 // アプリを更新したら、下の VERSION の数字を1つ増やしてください。
 // =============================================================
-const VERSION = 'wasurena-v1';
+const VERSION = 'wasurena-v2';
 const FILES = ['./', './index.html', './manifest.webmanifest', './favicon.svg', './icon-180.png', './icon-192.png', './icon-512.png'];
 
 // 最初に一度だけ：ファイルを保存する

@@ -213,6 +213,22 @@ textarea { min-height: 72px; resize: vertical; }
 .btn-row { display: flex; gap: 8px; flex-wrap: wrap; }
 .note { font-size: 13px; color: var(--sub); margin: 0; }
 
+/* 合格プラン・教材 */
+.plan { margin-top: 16px; }
+.plan-row { display: grid; grid-template-columns: 1fr; gap: 10px; align-items: end; margin-bottom: 8px; }
+@media (min-width: 600px) { .plan-row { grid-template-columns: 220px auto; justify-content: start; } }
+.plan-text { background: var(--accent-weak); border-radius: 10px; padding: 12px 14px; margin: 12px 0 4px; white-space: pre-wrap; font-size: 15px; }
+.plan-meta { font-size: 13px; color: var(--sub); margin-top: 12px; display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; align-items: center; }
+details.sub { margin-top: 10px; }
+details.sub > summary { cursor: pointer; font-weight: bold; font-size: 14px; padding: 8px 0; color: var(--accent); }
+details.sub textarea { margin: 6px 0 8px; }
+.chapters { list-style: none; margin: 6px 0 0; padding: 0; }
+.chapters li { border: none !important; padding: 0 !important; }
+.check { display: flex; align-items: center; gap: 10px; min-height: 44px; color: var(--text); font-size: 15px; margin: 0; cursor: pointer; }
+.check input { width: 22px; height: 22px; min-height: 0; flex-shrink: 0; accent-color: var(--accent); }
+.check.done span { color: var(--sub); text-decoration: line-through; }
+.check small { color: var(--sub); margin-left: auto; white-space: nowrap; }
+
 /* 画面下に一瞬出るお知らせ */
 .toast {
   position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%) translateY(20px);
@@ -245,6 +261,30 @@ textarea { min-height: 72px; resize: vertical; }
     <div class="review-list" id="todayList"></div>
   </section>
 
+  <!-- ===== 合格プラン（AIに相談） ===== -->
+  <section class="card plan" id="planCard">
+    <h2>合格プラン <span class="count">Claude（AI）に計画を立ててもらう</span></h2>
+    <div class="plan-row">
+      <div>
+        <label for="sMinutes">1日に勉強できる時間（分）</label>
+        <input id="sMinutes" type="number" min="5" max="600" step="5" inputmode="numeric">
+      </div>
+      <button type="button" class="primary" id="askBtn">Claudeに相談する</button>
+    </div>
+    <p class="note">押すと、教材の進み具合や復習の予定をまとめた相談文がコピーされ、Claudeが開きます。入力欄に貼り付けて送ってください。</p>
+    <div id="planView"></div>
+    <details class="sub">
+      <summary>Claudeの答えを貼り付けて保存する</summary>
+      <textarea id="planInput" rows="8" placeholder="Claudeの答えをここに貼り付け"></textarea>
+      <button type="button" class="small-btn" id="savePlanBtn">プランを保存</button>
+    </details>
+    <details class="sub">
+      <summary>相談文を見る（うまくコピーできないとき）</summary>
+      <textarea id="promptText" rows="10" readonly></textarea>
+      <button type="button" class="small-btn" id="copyBtn">相談文をコピー</button>
+    </details>
+  </section>
+
   <div class="grid">
     <div class="col">
       <!-- ===== ② 学習項目の登録 ===== -->
@@ -270,6 +310,36 @@ textarea { min-height: 72px; resize: vertical; }
           </div>
           <button class="primary" type="submit">登録する（今日を初回学習日にする）</button>
         </form>
+      </section>
+
+      <!-- ===== 教材（参考書・動画など） ===== -->
+      <section class="card">
+        <h2>使っている教材 <span class="count" id="materialCount"></span></h2>
+        <ul class="items" id="materialList"></ul>
+        <details class="sub" id="materialFormBox">
+          <summary>＋ 教材を登録する</summary>
+          <form class="form" id="materialForm">
+            <div>
+              <label for="mTitle">教材の名前（必須）</label>
+              <input id="mTitle" required maxlength="80" placeholder="例：ITパスポート 絶対合格の教科書">
+            </div>
+            <div>
+              <label for="mType">種類</label>
+              <select id="mType">
+                <option>参考書</option>
+                <option>動画</option>
+                <option>問題集・過去問</option>
+                <option>その他</option>
+              </select>
+            </div>
+            <div>
+              <label for="mChapters">章や動画の一覧（1行に1つ）</label>
+              <textarea id="mChapters" rows="6" placeholder="第1章 企業と法務 p.10〜60&#10;第2章 経営戦略 p.61〜100&#10;第3章 システム戦略 p.101〜140"></textarea>
+              <p class="note">目次を見ながら入れてください。ページ数や動画の長さも書くと、計画がより正確になります。目次の写真をClaudeに送って「章の一覧にして」と頼むと楽です。</p>
+            </div>
+            <button class="primary" type="submit">教材を登録する</button>
+          </form>
+        </details>
       </section>
 
       <!-- ===== ③ 全項目の一覧 ===== -->
@@ -362,9 +432,23 @@ const RESULT_LABEL = { good: 'できた', so: 'あいまい', bad: '忘れた' }
 // 最初の状態（データが何もないとき）
 function emptyData() {
   return {
-    settings: { examName: 'ITパスポート', examDate: '2026-11-30', theme: null },
-    items: [],  // 学習項目のリスト
-    log: {}     // 日ごとの復習回数 例：{ "2026-11-07": 3 }
+    settings: { examName: 'ITパスポート', examDate: '2026-11-30', theme: null, dailyMinutes: 60 },
+    items: [],      // 学習項目のリスト
+    log: {},        // 日ごとの復習回数 例：{ "2026-11-07": 3 }
+    materials: [],  // 教材（参考書・動画など）と章の進み具合
+    plan: null      // 保存した合格プラン { text, date }
+  };
+}
+
+// 読み込んだデータの足りない部分を、最初の状態で補う
+function normalize(d) {
+  const base = emptyData();
+  return {
+    settings: { ...base.settings, ...(d.settings || {}) },
+    items: d.items || [],
+    log: d.log || {},
+    materials: d.materials || [],
+    plan: d.plan || null
   };
 }
 
@@ -374,12 +458,7 @@ function emptyData() {
 function loadData() {
   try {
     const text = localStorage.getItem(STORAGE_KEY);
-    if (text) {
-      const d = JSON.parse(text);
-      // 足りない部分があれば最初の状態で補う
-      const base = emptyData();
-      return { settings: { ...base.settings, ...d.settings }, items: d.items || [], log: d.log || {} };
-    }
+    if (text) return normalize(JSON.parse(text));
   } catch (e) { /* 読めなかったときは空から始める */ }
   return emptyData();
 }
@@ -425,6 +504,10 @@ function daysBetween(a, b) {
 function fmt(s) {
   const d = parseDate(s);
   return `${d.getMonth() + 1}/${d.getDate()}(${'日月火水木金土'[d.getDay()]})`;
+}
+function fmtLong(s) {
+  const d = parseDate(s);
+  return `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日(${'日月火水木金土'[d.getDay()]})`;
 }
 function fmtShort(s) {
   const d = parseDate(s);
@@ -530,6 +613,8 @@ function render() {
   applyTheme();
   renderStats();
   renderToday();
+  renderPlan();
+  renderMaterials();
   renderList();
   renderCurve();
   renderCompare();
@@ -796,6 +881,151 @@ function renderBars() {
   $('#barInfo').innerHTML = `30日間の合計 <b>${total}回</b>　復習した日 <b>${active}日</b>　今日 <b>${data.log[t] || 0}回</b>`;
 }
 
+/* ===========================================================
+   教材（参考書・動画など）
+   章ごとにチェックをつけて、どこまで進んだかを記録します
+   =========================================================== */
+const openMaterials = new Set(); // 章の一覧を開いている教材（描き直しても開いたままにする）
+
+function renderMaterials() {
+  const box = $('#materialList');
+  $('#materialCount').textContent = data.materials.length ? `${data.materials.length}件` : '';
+  if (!data.materials.length) {
+    box.innerHTML = '<li><p class="empty" style="padding:4px 0 0">参考書や動画を登録すると、AIがそれをもとに「いつまでにどこをやるか」を考えてくれます。</p></li>';
+    return;
+  }
+  box.innerHTML = data.materials.map(m => {
+    const total = m.chapters.length;
+    const done = m.chapters.filter(c => c.done).length;
+    const rate = total ? done / total : 0;
+    return `
+      <li>
+        <div class="row1">
+          <div><b>${esc(m.title)}</b> <span class="chip">${esc(m.type)}</span></div>
+          <button type="button" class="small-btn danger" data-action="del-material" data-id="${m.id}" aria-label="${esc(m.title)}を削除">削除</button>
+        </div>
+        <div class="meter"><span style="width:${rate * 100}%;background:var(--accent)"></span></div>
+        <div class="row2"><span>${total ? `<b>${done} / ${total}</b> 完了（${Math.round(rate * 100)}%）` : '章の登録なし'}</span></div>
+        ${total ? `
+        <details class="sub" data-mid="${m.id}" ${openMaterials.has(m.id) ? 'open' : ''}>
+          <summary>章の一覧（終わったらチェック）</summary>
+          <ul class="chapters">
+            ${m.chapters.map((c, i) => `
+              <li><label class="check ${c.done ? 'done' : ''}">
+                <input type="checkbox" data-chapter="${m.id}" data-index="${i}" ${c.done ? 'checked' : ''}>
+                <span>${esc(c.title)}</span>
+                ${c.done && c.doneDate ? `<small>${fmtShort(c.doneDate)} 完了</small>` : ''}
+              </label></li>`).join('')}
+          </ul>
+        </details>` : ''}
+      </li>`;
+  }).join('');
+}
+
+function createMaterial(title, type, chapterText) {
+  const chapters = chapterText.split('\n').map(s => s.trim()).filter(Boolean)
+    .map(t => ({ title: t, done: false, doneDate: null }));
+  return { id: makeId(), title, type, chapters, addedDate: today() };
+}
+
+/* ===========================================================
+   合格プラン（AIのClaudeに相談する）
+   アプリの中の情報をまとめた「相談文」を作り、Claudeに貼り付けて使います
+   =========================================================== */
+function buildPrompt() {
+  const s = data.settings;
+  const t = today();
+  const L = [];
+  L.push('あなたは資格試験の学習コーチです。下の状況をもとに、試験に合格するための学習計画を作ってください。', '');
+
+  L.push('# 目標');
+  L.push(`- 資格：${s.examName || '（未設定）'}`);
+  if (s.examDate) L.push(`- 試験日：${fmtLong(s.examDate)}（今日からあと${daysBetween(t, s.examDate)}日）`);
+  L.push(`- 今日：${fmtLong(t)}`);
+  L.push(`- 1日に勉強できる時間：約${s.dailyMinutes || 60}分`, '');
+
+  L.push('# 使っている教材');
+  if (!data.materials.length) {
+    L.push('（まだ登録していません。この資格の一般的な参考書・過去問の進め方で提案してください）');
+  }
+  data.materials.forEach(m => {
+    const done = m.chapters.filter(c => c.done).length;
+    L.push(`## ${m.title}（${m.type}）`);
+    if (m.chapters.length) {
+      L.push(`進み具合：${done} / ${m.chapters.length} 完了`);
+      m.chapters.forEach(c => L.push(`- ${c.done ? '［済］' : '［未］'} ${c.title}`));
+    } else {
+      L.push('（章の一覧は未登録）');
+    }
+  });
+  L.push('');
+
+  L.push('# 覚えた内容の復習状況（このアプリで、忘却曲線にもとづいて復習を管理しています）');
+  if (!data.items.length) {
+    L.push('（まだ登録なし）');
+  } else {
+    const cats = {};
+    data.items.forEach(i => { cats[i.category] = (cats[i.category] || 0) + 1; });
+    L.push('分野ごとの項目数：' + Object.entries(cats).map(([k, v]) => `${k} ${v}件`).join('、'));
+    const overdue = data.items.filter(i => i.nextDate < t).length;
+    if (overdue) L.push(`復習の期限を過ぎている項目：${overdue}件`);
+    const plan = [];
+    for (let n = 0; n < 14; n++) {
+      const d = addDays(t, n);
+      const c = data.items.filter(i => i.nextDate === d).length;
+      if (c) plan.push(`${fmtShort(d)} ${c}件`);
+    }
+    if (plan.length) L.push('今後2週間の復習予定：' + plan.join('、'));
+    L.push('項目一覧（記憶の残り具合が低い順）：');
+    [...data.items].sort((a, b) => retention(a) - retention(b)).slice(0, 40)
+      .forEach(i => L.push(`- ${i.name}［${i.category}］ 残り具合${pct(retention(i))}・次の復習${fmtShort(i.nextDate)}`));
+  }
+  L.push('');
+
+  L.push('# お願い');
+  L.push('1. 教材ごとに「どの章を何月何日までに終わらせるか」を日付つきで決めてください（例：第1章を11月9日までに終わらせる）。');
+  L.push('2. 教材を仕上げる日と、そのあと過去問・模擬試験に切り替える日を決めてください。');
+  L.push('3. 「今日やること」と「今週やること」を具体的に書いてください。');
+  L.push('4. 1日の勉強時間と復習の予定を考えて、無理のない量にしてください。試験直前の数日は総復習にあててください。');
+  L.push('5. 分野の偏りなど、気をつけることがあれば最後に一言ください。');
+  L.push('答えはアプリに貼り付けて保存するので、表は使わず、見出しと箇条書きだけで短くまとめてください。');
+  return L.join('\n');
+}
+
+// Claudeの答えを読みやすく表示する（見出し・太字だけ整える）
+function planToHtml(text) {
+  return esc(text).split('\n').map(line => {
+    const h = line.match(/^#{1,6}\s*(.*)$/);
+    if (h) return `<b>${h[1]}</b>`;
+    return line.replace(/\*\*(.+?)\*\*/g, '<b>$1</b>');
+  }).join('\n');
+}
+
+function renderPlan() {
+  $('#sMinutes').value = data.settings.dailyMinutes || 60;
+  const view = $('#planView');
+  if (!data.plan) {
+    view.innerHTML = '';
+    return;
+  }
+  const age = daysBetween(data.plan.date, today());
+  view.innerHTML = `
+    <div class="plan-meta">
+      <span>保存したプラン（${fmt(data.plan.date)}作成${age >= 7 ? '・そろそろ作り直しどき' : ''}）</span>
+      <button type="button" class="small-btn danger" data-action="del-plan">プランを消す</button>
+    </div>
+    <div class="plan-text">${planToHtml(data.plan.text)}</div>`;
+}
+
+function copyText(text) {
+  if (navigator.clipboard && window.isSecureContext) return navigator.clipboard.writeText(text);
+  // 古いブラウザ向けの方法
+  const ta = $('#promptText');
+  ta.value = text;
+  ta.select();
+  return document.execCommand('copy') ? Promise.resolve() : Promise.reject();
+}
+
 function renderSettings() {
   if (document.activeElement !== $('#sExam')) $('#sExam').value = data.settings.examName || '';
   $('#sDate').value = data.settings.examDate || '';
@@ -848,6 +1078,15 @@ function loadSample() {
     if (i === 10 || i === 18) continue; // サボった日
     fresh.log[D(-i)] = (fresh.log[D(-i)] || 0) + ((i * 7) % 4) + 1;
   }
+  // 教材のサンプル（3章まで終わっている参考書）
+  const book = createMaterial('参考書（サンプル）', '参考書', [
+    '第1章 企業活動と法務 p.10〜58', '第2章 経営戦略 p.59〜96', '第3章 システム戦略 p.97〜130',
+    '第4章 開発技術 p.131〜160', '第5章 プロジェクトマネジメント p.161〜184', '第6章 サービスマネジメント p.185〜210',
+    '第7章 基礎理論・アルゴリズム p.211〜250', '第8章 コンピュータシステム p.251〜290',
+    '第9章 データベース・ネットワーク p.291〜340', '第10章 情報セキュリティ p.341〜400'
+  ].join('\n'));
+  [0, 1, 2].forEach((i, k) => { book.chapters[i].done = true; book.chapters[i].doneDate = D(-12 + k * 4); });
+  fresh.materials = [book, createMaterial('過去問（サンプル）', '問題集・過去問', '令和6年度\n令和5年度\n令和4年度')];
   data = fresh;
   selectedId = null;
   saveData();
@@ -896,6 +1135,19 @@ document.addEventListener('click', e => {
     renderCurve();
     $('#curveCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
+  if (action === 'del-material') {
+    const m = data.materials.find(x => x.id === id);
+    if (m && confirm(`教材「${m.title}」を削除しますか？（元に戻せません）`)) {
+      data.materials = data.materials.filter(x => x.id !== id);
+      saveData();
+      render();
+    }
+  }
+  if (action === 'del-plan' && confirm('保存したプランを消しますか？')) {
+    data.plan = null;
+    saveData();
+    renderPlan();
+  }
   if (action === 'delete') {
     const item = data.items.find(i => i.id === id);
     if (item && confirm(`「${item.name}」を削除しますか？（元に戻せません）`)) {
@@ -907,6 +1159,82 @@ document.addEventListener('click', e => {
 });
 
 $('#curveSelect').addEventListener('change', e => { selectedId = e.target.value; renderCurve(); });
+
+// 教材の登録
+$('#materialForm').addEventListener('submit', e => {
+  e.preventDefault();
+  const title = $('#mTitle').value.trim();
+  if (!title) { $('#mTitle').focus(); return; }
+  const m = createMaterial(title, $('#mType').value, $('#mChapters').value);
+  data.materials.push(m);
+  saveData();
+  $('#mTitle').value = '';
+  $('#mChapters').value = '';
+  $('#materialFormBox').open = false;
+  openMaterials.add(m.id);
+  render();
+  showToast(`教材「${title}」を登録しました（${m.chapters.length}章）`);
+});
+
+// 章のチェック
+document.addEventListener('change', e => {
+  const box = e.target.closest('[data-chapter]');
+  if (!box) return;
+  const m = data.materials.find(x => x.id === box.dataset.chapter);
+  const c = m && m.chapters[Number(box.dataset.index)];
+  if (!c) return;
+  c.done = box.checked;
+  c.doneDate = box.checked ? today() : null;
+  saveData();
+  renderMaterials();
+  const left = m.chapters.filter(x => !x.done).length;
+  if (box.checked) showToast(left ? `「${c.title}」完了！ のこり${left}章` : `「${m.title}」を全部終えました！`);
+});
+
+// 章の一覧を開いた・閉じたを覚えておく
+document.addEventListener('toggle', e => {
+  const id = e.target.dataset && e.target.dataset.mid;
+  if (!id) return;
+  if (e.target.open) openMaterials.add(id); else openMaterials.delete(id);
+}, true);
+
+// 1日の勉強時間
+$('#sMinutes').addEventListener('change', e => {
+  const v = Math.round(Number(e.target.value));
+  data.settings.dailyMinutes = v >= 5 ? Math.min(v, 600) : 60;
+  saveData();
+  renderPlan();
+});
+
+// Claudeに相談する：相談文をコピーしてClaudeを開く
+$('#askBtn').addEventListener('click', () => {
+  const text = buildPrompt();
+  $('#promptText').value = text;
+  copyText(text)
+    .then(() => showToast('相談文をコピーしました。Claudeの入力欄に貼り付けて送ってください'))
+    .catch(() => showToast('コピーできませんでした。下の「相談文を見る」から手でコピーしてください'));
+  window.open('https://claude.ai/new', '_blank', 'noopener');
+});
+$('#copyBtn').addEventListener('click', () => {
+  const text = buildPrompt();
+  $('#promptText').value = text;
+  copyText(text).then(() => showToast('相談文をコピーしました')).catch(() => showToast('コピーできませんでした。文字を長押しして選んでください'));
+});
+document.querySelector('#promptText').closest('details').addEventListener('toggle', e => {
+  if (e.target.open) $('#promptText').value = buildPrompt();
+});
+
+// Claudeの答えを保存
+$('#savePlanBtn').addEventListener('click', () => {
+  const text = $('#planInput').value.trim();
+  if (!text) { showToast('Claudeの答えを貼り付けてから押してください'); $('#planInput').focus(); return; }
+  data.plan = { text, date: today() };
+  saveData();
+  $('#planInput').value = '';
+  $('#planInput').closest('details').open = false;
+  renderPlan();
+  showToast('プランを保存しました');
+});
 
 $('#themeBtn').addEventListener('click', () => {
   data.settings.theme = isDark() ? 'light' : 'dark';
@@ -948,7 +1276,7 @@ $('#importFile').addEventListener('change', e => {
       const d = JSON.parse(reader.result);
       if (!Array.isArray(d.items)) throw new Error();
       if (!confirm(`${d.items.length}件の項目を読み込みます。今のデータは置き換わります。よろしいですか？`)) return;
-      data = { settings: { ...emptyData().settings, ...d.settings }, items: d.items, log: d.log || {} };
+      data = normalize(d);
       saveData();
       render();
       showToast('バックアップから戻しました');
