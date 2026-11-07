@@ -1,0 +1,984 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ワスレナ</title>
+<!-- ホーム画面に追加したときのアプリ名・アイコンなどの設定 -->
+<meta name="description" content="忘却曲線で復習のタイミングを管理する学習アプリ">
+<meta name="theme-color" content="#3a6db3">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="ワスレナ">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<style>
+/* ===========================================================
+   色の設定（ここを変えるとアプリ全体の色が変わります）
+   =========================================================== */
+:root {
+  --bg: #f4f5f7;
+  --card: #ffffff;
+  --text: #1f2933;
+  --sub: #5f6b7a;
+  --line: #e0e4e9;
+  --accent: #3a6db3;
+  --accent-weak: #e6edf8;
+  --good: #2f855a;  --good-weak: #e2f3e9;
+  --mid: #b7791f;   --mid-weak: #fbf0db;
+  --bad: #c53030;   --bad-weak: #fbe6e6;
+  --shadow: 0 1px 3px rgba(0, 0, 0, .06);
+  color-scheme: light;
+}
+/* ダークモードの色（手動で「ダーク」にしたとき） */
+:root[data-theme="dark"] {
+  --bg: #14171c; --card: #1d2128; --text: #e4e7eb; --sub: #9aa5b1; --line: #2f353e;
+  --accent: #6d9fe2; --accent-weak: #22324a;
+  --good: #5cc08a; --good-weak: #1c3327;
+  --mid: #e2a843;  --mid-weak: #3a2f19;
+  --bad: #f07272;  --bad-weak: #3e2121;
+  --shadow: none;
+  color-scheme: dark;
+}
+/* ダークモードの色（スマホ・PCの設定がダークのとき自動で） */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #14171c; --card: #1d2128; --text: #e4e7eb; --sub: #9aa5b1; --line: #2f353e;
+    --accent: #6d9fe2; --accent-weak: #22324a;
+    --good: #5cc08a; --good-weak: #1c3327;
+    --mid: #e2a843;  --mid-weak: #3a2f19;
+    --bad: #f07272;  --bad-weak: #3e2121;
+    --shadow: none;
+    color-scheme: dark;
+  }
+}
+
+/* ===========================================================
+   全体のレイアウト
+   =========================================================== */
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Yu Gothic UI", Meiryo, sans-serif;
+  font-size: 16px;
+  line-height: 1.6;
+}
+.wrap { max-width: 1100px; margin: 0 auto; padding: 16px 16px 48px; }
+.top { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.top h1 { font-size: 20px; margin: 0; }
+.top h1 small { display: block; font-size: 12px; color: var(--sub); font-weight: normal; }
+.brand { display: flex; align-items: center; gap: 10px; line-height: 1.3; }
+.brand img { border-radius: 8px; flex-shrink: 0; }
+/* ホーム画面から開いたとき、iPhoneの上の部分（時計など）と重ならないようにする */
+.wrap { padding-top: max(16px, env(safe-area-inset-top)); }
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+  padding: 16px;
+}
+.card h2 { font-size: 17px; margin: 0 0 12px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.card h2 .count { font-size: 13px; font-weight: normal; color: var(--sub); }
+.grid { display: grid; gap: 16px; margin-top: 16px; }
+.col { display: grid; gap: 16px; align-content: start; }
+@media (min-width: 900px) {
+  .grid { grid-template-columns: 1fr 1fr; }
+}
+
+/* 上の数字（試験まで・連続日数・今日の残り） */
+.stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.stat { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; text-align: center; box-shadow: var(--shadow); }
+.stat .label { font-size: 12px; color: var(--sub); }
+.stat .num { font-size: 26px; font-weight: bold; line-height: 1.2; }
+.stat .num small { font-size: 13px; font-weight: normal; margin-left: 2px; }
+.stat.exam .num { color: var(--accent); }
+
+/* ===========================================================
+   今日やる復習
+   =========================================================== */
+.today { margin-top: 16px; border: 2px solid var(--accent); }
+.review-list { display: grid; gap: 12px; }
+@media (min-width: 900px) { .review-list { grid-template-columns: 1fr 1fr; } }
+.review {
+  border: 1px solid var(--line);
+  border-left: 6px solid var(--accent);
+  border-radius: 10px;
+  padding: 12px;
+  background: var(--card);
+}
+.review.overdue { border-left-color: var(--bad); background: var(--bad-weak); }
+.review .name { font-weight: bold; font-size: 17px; }
+.review .meta { font-size: 13px; color: var(--sub); margin: 2px 0 8px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.review .memo { font-size: 14px; color: var(--sub); margin: 0 0 10px; white-space: pre-wrap; }
+.late { color: var(--bad); font-weight: bold; }
+.choices { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+
+/* ===========================================================
+   ボタン・入力欄
+   =========================================================== */
+button, .btn {
+  font: inherit;
+  min-height: 48px;
+  padding: 8px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--card);
+  color: var(--text);
+  cursor: pointer;
+  font-weight: bold;
+}
+button:hover { filter: brightness(.96); }
+button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 3px solid var(--accent); outline-offset: 1px; }
+.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.c-good { background: var(--good-weak); border-color: var(--good); color: var(--good); }
+.c-so   { background: var(--mid-weak);  border-color: var(--mid);  color: var(--mid); }
+.c-bad  { background: var(--bad-weak);  border-color: var(--bad);  color: var(--bad); }
+.choices button { padding: 6px 4px; line-height: 1.3; }
+.choices button small { display: block; font-size: 11px; font-weight: normal; }
+.small-btn { min-height: 40px; padding: 4px 12px; font-size: 14px; }
+.danger { color: var(--bad); }
+.icon-btn { min-height: 44px; min-width: 44px; padding: 4px 10px; font-size: 14px; }
+
+label { display: block; font-size: 14px; color: var(--sub); margin-bottom: 4px; }
+input, select, textarea {
+  font: inherit;
+  width: 100%;
+  min-height: 48px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg);
+  color: var(--text);
+}
+textarea { min-height: 72px; resize: vertical; }
+.form { display: grid; gap: 12px; }
+
+/* ===========================================================
+   一覧・グラフ・その他
+   =========================================================== */
+.chip { display: inline-block; font-size: 12px; padding: 1px 8px; border-radius: 999px; background: var(--accent-weak); color: var(--accent); font-weight: bold; }
+.warn { display: inline-block; font-size: 12px; padding: 1px 8px; border-radius: 999px; background: var(--bad-weak); color: var(--bad); font-weight: bold; }
+.empty { color: var(--sub); text-align: center; padding: 16px 8px; margin: 0; }
+
+.items { list-style: none; margin: 0; padding: 0; }
+.items li { border-top: 1px solid var(--line); padding: 12px 0; }
+.items li:first-child { border-top: none; padding-top: 0; }
+.row1 { display: flex; justify-content: space-between; gap: 8px; align-items: flex-start; }
+.row1 summary { cursor: pointer; font-weight: bold; }
+.row1 details p { font-size: 14px; color: var(--sub); margin: 4px 0 0; white-space: pre-wrap; }
+.item-btns { display: flex; gap: 6px; flex-shrink: 0; }
+.meter { height: 8px; background: var(--line); border-radius: 99px; overflow: hidden; margin: 8px 0 4px; }
+.meter span { display: block; height: 100%; border-radius: 99px; }
+.row2 { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; color: var(--sub); flex-wrap: wrap; }
+.row2 b { color: var(--text); }
+
+.chart-box { width: 100%; }
+.chart-box svg { display: block; width: 100%; height: auto; }
+.info { font-size: 14px; color: var(--sub); margin: 8px 0 0; }
+.info b { color: var(--text); }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 13px; color: var(--sub); margin-top: 6px; }
+.legend i { display: inline-block; width: 14px; height: 4px; border-radius: 2px; background: var(--accent); vertical-align: middle; margin-right: 4px; }
+.legend .dot { width: 10px; height: 10px; border-radius: 50%; }
+
+/* SVGグラフの色（CSSの色設定を使うのでダークモードにも自動対応） */
+.g-axis { stroke: var(--line); }
+.g-text { fill: var(--sub); font-size: 11px; }
+.g-line { fill: none; stroke: var(--accent); stroke-width: 2.5; }
+.g-future { fill: none; stroke: var(--accent); stroke-width: 2; stroke-dasharray: 5 4; opacity: .7; }
+.g-area { fill: var(--accent); opacity: .1; }
+.g-zone { fill: var(--bad); opacity: .07; }
+.g-th { stroke: var(--bad); stroke-dasharray: 4 3; }
+.g-th-text { fill: var(--bad); font-size: 11px; }
+.g-today { stroke: var(--sub); stroke-dasharray: 2 3; }
+.g-next { stroke: var(--good); stroke-dasharray: 4 3; }
+.g-next-text { fill: var(--good); font-size: 11px; font-weight: bold; }
+.m-good { fill: var(--good); }
+.m-so   { fill: var(--mid); }
+.m-bad  { fill: var(--bad); }
+.g-bar { fill: var(--accent); opacity: .55; }
+.g-bar.today { opacity: 1; }
+.g-bar-num { fill: var(--text); font-size: 10px; text-anchor: middle; }
+
+.curve-head { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
+.curve-head select { flex: 1; min-width: 0; }
+
+.settings summary { cursor: pointer; font-weight: bold; font-size: 17px; min-height: 32px; }
+.settings .form { margin-top: 12px; }
+.btn-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.note { font-size: 13px; color: var(--sub); margin: 0; }
+
+/* 画面下に一瞬出るお知らせ */
+.toast {
+  position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%) translateY(20px);
+  background: var(--text); color: var(--bg);
+  padding: 12px 18px; border-radius: 10px; font-size: 14px;
+  opacity: 0; pointer-events: none; transition: .25s; max-width: calc(100% - 32px);
+}
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- ===== ヘッダー ===== -->
+  <header class="top">
+    <h1 class="brand"><img src="favicon.svg" alt="" width="36" height="36"><span>ワスレナ<small id="subtitle">忘却曲線で復習のタイミングを管理</small></span></h1>
+    <button class="icon-btn" id="themeBtn" type="button" aria-label="表示の明るさを切り替え">🌙 ダーク</button>
+  </header>
+
+  <!-- ===== 上の数字 ===== -->
+  <section class="stats" aria-label="学習の状況">
+    <div class="stat exam"><div class="label" id="examLabel">試験まで</div><div class="num" id="statExam">-</div></div>
+    <div class="stat"><div class="label">連続学習</div><div class="num" id="statStreak">-</div></div>
+    <div class="stat"><div class="label">今日の残り</div><div class="num" id="statLeft">-</div></div>
+  </section>
+
+  <!-- ===== ① 今日やる復習（いちばん上） ===== -->
+  <section class="card today">
+    <h2>今日やる復習 <span class="count" id="todayCount"></span></h2>
+    <div class="review-list" id="todayList"></div>
+  </section>
+
+  <div class="grid">
+    <div class="col">
+      <!-- ===== ② 学習項目の登録 ===== -->
+      <section class="card">
+        <h2>学習項目の登録</h2>
+        <form class="form" id="addForm">
+          <div>
+            <label for="fName">項目名（必須）</label>
+            <input id="fName" required maxlength="60" placeholder="例：ネットワークの基礎">
+          </div>
+          <div>
+            <label for="fCat">分野</label>
+            <select id="fCat">
+              <option>ストラテジ系</option>
+              <option>マネジメント系</option>
+              <option>テクノロジ系</option>
+              <option>その他</option>
+            </select>
+          </div>
+          <div>
+            <label for="fMemo">メモ（覚えたいポイントなど）</label>
+            <textarea id="fMemo" maxlength="500" placeholder="例：TCP/IPの4つの層"></textarea>
+          </div>
+          <button class="primary" type="submit">登録する（今日を初回学習日にする）</button>
+        </form>
+      </section>
+
+      <!-- ===== ③ 全項目の一覧 ===== -->
+      <section class="card">
+        <h2>すべての項目 <span class="count" id="itemCount"></span></h2>
+        <p class="note" style="margin-bottom:10px">記憶が残っていそうな割合（推定保持率）が低い順に並んでいます。</p>
+        <ul class="items" id="itemList"></ul>
+      </section>
+    </div>
+
+    <div class="col">
+      <!-- ===== ④ 忘却曲線グラフ ===== -->
+      <section class="card" id="curveCard">
+        <h2>忘却曲線</h2>
+        <div class="curve-head">
+          <select id="curveSelect" aria-label="グラフに表示する項目"></select>
+        </div>
+        <div class="chart-box" id="curveBox"></div>
+        <div class="legend" id="curveLegend">
+          <span><i></i>推定保持率</span>
+          <span><i style="background:var(--bad)"></i>60%（そろそろ復習の目安）</span>
+          <span><i class="dot" style="background:var(--good)"></i>できた</span>
+          <span><i class="dot" style="background:var(--mid)"></i>あいまい</span>
+          <span><i class="dot" style="background:var(--bad)"></i>忘れた</span>
+        </div>
+        <p class="info" id="curveInfo"></p>
+
+        <details style="margin-top:12px">
+          <summary style="cursor:pointer;font-size:14px;font-weight:bold">記憶の強さと曲線の関係を見る</summary>
+          <div class="chart-box" id="compareBox" style="margin-top:8px"></div>
+          <div class="legend" id="compareLegend"></div>
+          <p class="note" style="margin-top:6px">復習に成功するたびに「記憶の強さ」が大きくなり、曲線の下がり方がゆるやかになります。点は60%を下回るタイミング（＝次の復習日）です。</p>
+        </details>
+      </section>
+
+      <!-- ===== ⑤ 学習記録 ===== -->
+      <section class="card">
+        <h2>学習記録 <span class="count">直近30日の復習回数</span></h2>
+        <div class="chart-box" id="barBox"></div>
+        <p class="info" id="barInfo"></p>
+      </section>
+
+      <!-- ===== ⑥ 設定 ===== -->
+      <section class="card">
+        <details class="settings">
+          <summary>設定・データ管理</summary>
+          <div class="form">
+            <div>
+              <label for="sExam">資格名</label>
+              <input id="sExam" maxlength="40">
+            </div>
+            <div>
+              <label for="sDate">試験日</label>
+              <input id="sDate" type="date">
+            </div>
+            <div class="btn-row">
+              <button type="button" class="small-btn" id="sampleBtn">サンプルデータを入れる</button>
+              <button type="button" class="small-btn" id="exportBtn">バックアップを保存</button>
+              <button type="button" class="small-btn" id="importBtn">バックアップから戻す</button>
+              <input type="file" id="importFile" accept="application/json,.json" hidden>
+            </div>
+            <button type="button" class="small-btn danger" id="clearBtn">すべてのデータを削除</button>
+            <p class="note">データはこのブラウザの中だけに保存されます。スマホとPCでデータは共有されないので、移すときは「バックアップを保存」→ もう一方で「バックアップから戻す」を使ってください。</p>
+          </div>
+        </details>
+      </section>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+/* ===========================================================
+   基本の決まりごと
+   =========================================================== */
+
+// 保存に使う名前（localStorage の「引き出し」の名前のようなもの）
+const STORAGE_KEY = 'fukushu-note-v1';
+
+// 復習の間隔（日数）。左から順に進んでいく
+const INTERVALS = [1, 3, 7, 14, 30];
+
+// 保持率がこれを下回ったら「そろそろ復習」
+const THRESHOLD = 0.6;
+
+// 理解度の表示名
+const RESULT_LABEL = { good: 'できた', so: 'あいまい', bad: '忘れた' };
+
+// 最初の状態（データが何もないとき）
+function emptyData() {
+  return {
+    settings: { examName: 'ITパスポート', examDate: '2026-11-30', theme: null },
+    items: [],  // 学習項目のリスト
+    log: {}     // 日ごとの復習回数 例：{ "2026-11-07": 3 }
+  };
+}
+
+/* ===========================================================
+   保存と読み込み
+   =========================================================== */
+function loadData() {
+  try {
+    const text = localStorage.getItem(STORAGE_KEY);
+    if (text) {
+      const d = JSON.parse(text);
+      // 足りない部分があれば最初の状態で補う
+      const base = emptyData();
+      return { settings: { ...base.settings, ...d.settings }, items: d.items || [], log: d.log || {} };
+    }
+  } catch (e) { /* 読めなかったときは空から始める */ }
+  return emptyData();
+}
+
+function saveData() {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  } catch (e) {
+    showToast('保存できませんでした（プライベートモードなどでは保存できないことがあります）');
+  }
+}
+
+let data = loadData();
+let selectedId = null;  // グラフに表示している項目
+
+/* ===========================================================
+   日付の計算
+   日付は "2026-11-07" のような文字列で扱います
+   =========================================================== */
+function toDateStr(d) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+function parseDate(s) {
+  const [y, m, d] = s.split('-').map(Number);
+  return new Date(y, m - 1, d);
+}
+function today() { return toDateStr(new Date()); }
+
+// s の n 日後（n がマイナスなら n 日前）
+function addDays(s, n) {
+  const d = parseDate(s);
+  d.setDate(d.getDate() + n);
+  return toDateStr(d);
+}
+// a から b まで何日あるか
+function daysBetween(a, b) {
+  return Math.round((parseDate(b) - parseDate(a)) / 86400000);
+}
+// 画面に出す形 例：11/7(土)
+function fmt(s) {
+  const d = parseDate(s);
+  return `${d.getMonth() + 1}/${d.getDate()}(${'日月火水木金土'[d.getDay()]})`;
+}
+function fmtShort(s) {
+  const d = parseDate(s);
+  return `${d.getMonth() + 1}/${d.getDate()}`;
+}
+
+/* ===========================================================
+   忘却曲線の計算
+   保持率 = e^(-経過日数 / 記憶の強さ)
+   記憶の強さ = 今の間隔 × 2
+   → ちょうど復習日のころに保持率が約60%まで下がる
+   =========================================================== */
+function strengthOf(step) {
+  return INTERVALS[step] * 2;
+}
+function retention(item, onDate = today()) {
+  const passed = Math.max(0, daysBetween(item.lastDate, onDate));
+  return Math.exp(-passed / strengthOf(item.step));
+}
+
+/* ===========================================================
+   項目の追加と復習
+   =========================================================== */
+function makeId() {
+  return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+}
+
+function createItem(name, category, memo, date) {
+  return {
+    id: makeId(),
+    name, category, memo,
+    firstDate: date,                    // 初回学習日
+    step: 0,                            // 今の間隔の番号（0なら1日）
+    lastDate: date,                     // 最後に学習した日
+    nextDate: addDays(date, INTERVALS[0]), // 次の復習日
+    history: []                         // 復習の記録
+  };
+}
+
+// 復習の結果を項目に反映する（ここが理解度による調整のルール）
+function applyReview(item, result, date) {
+  let step = item.step;
+  if (result === 'good') {
+    step = Math.min(step + 1, INTERVALS.length - 1); // できた → 次の間隔へ（30日の後はずっと30日）
+  } else if (result === 'bad') {
+    step = 0;                                        // 忘れた → 1日後からやり直し
+  }                                                  // あいまい → 同じ間隔のまま
+  item.step = step;
+  item.lastDate = date;
+  item.nextDate = addDays(date, INTERVALS[step]);
+  item.history.push({ date, result, step });
+}
+
+function reviewItem(id, result) {
+  const item = data.items.find(i => i.id === id);
+  if (!item) return;
+  const t = today();
+  applyReview(item, result, t);
+  data.log[t] = (data.log[t] || 0) + 1;
+  saveData();
+  render();
+  showToast(`「${item.name}」${RESULT_LABEL[result]} → 次は ${fmt(item.nextDate)}（${INTERVALS[item.step]}日後）`);
+}
+
+// 今日やる復習（期限が今日以前のもの）
+function dueItems() {
+  const t = today();
+  return data.items
+    .filter(i => i.nextDate <= t)
+    .sort((a, b) => a.nextDate.localeCompare(b.nextDate));
+}
+
+/* ===========================================================
+   連続学習日数（ストリーク）
+   復習した日、または項目を登録した日を「学習した日」と数えます
+   今日まだやっていなくても、昨日までの連続はそのまま表示します
+   =========================================================== */
+function studiedOn(d) {
+  return (data.log[d] || 0) > 0 || data.items.some(i => i.firstDate === d);
+}
+function streak() {
+  let d = today();
+  if (!studiedOn(d)) d = addDays(d, -1);
+  let n = 0;
+  while (studiedOn(d)) { n++; d = addDays(d, -1); }
+  return n;
+}
+
+/* ===========================================================
+   画面を描く
+   データが変わるたびに render() を呼んで全部描き直します
+   =========================================================== */
+const $ = sel => document.querySelector(sel);
+
+// 入力された文字をそのまま画面に出すと危ないので、記号を置き換える
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+function pct(r) { return Math.round(r * 100) + '%'; }
+function colorOf(r) { return r >= 0.8 ? 'var(--good)' : r >= THRESHOLD ? 'var(--mid)' : 'var(--bad)'; }
+
+function render() {
+  applyTheme();
+  renderStats();
+  renderToday();
+  renderList();
+  renderCurve();
+  renderCompare();
+  renderBars();
+  renderSettings();
+}
+
+function renderStats() {
+  const s = data.settings;
+  $('#subtitle').textContent = s.examName ? `${s.examName} の復習` : '忘却曲線で復習のタイミングを管理';
+  $('#examLabel').textContent = s.examDate ? `試験まで（${fmtShort(s.examDate)}）` : '試験まで';
+  let exam = '-';
+  if (s.examDate) {
+    const left = daysBetween(today(), s.examDate);
+    exam = left > 0 ? `${left}<small>日</small>` : left === 0 ? '今日！' : '終了';
+  }
+  $('#statExam').innerHTML = exam;
+  $('#statStreak').innerHTML = `${streak()}<small>日</small>`;
+  $('#statLeft').innerHTML = `${dueItems().length}<small>件</small>`;
+}
+
+function renderToday() {
+  const list = dueItems();
+  const box = $('#todayList');
+  $('#todayCount').textContent = list.length ? `${list.length}件` : '';
+
+  if (data.items.length === 0) {
+    box.innerHTML = `<div class="empty">まだ学習項目がありません。<br>下の「学習項目の登録」から追加するか、まずはサンプルで試してみましょう。<br><br>
+      <button type="button" class="primary" data-action="sample">サンプルデータで試す</button></div>`;
+    return;
+  }
+  if (list.length === 0) {
+    const next = [...data.items].sort((a, b) => a.nextDate.localeCompare(b.nextDate))[0];
+    box.innerHTML = `<p class="empty">今日の復習はすべて終わりました。おつかれさまでした！<br>次の復習：${fmt(next.nextDate)}「${esc(next.name)}」</p>`;
+    return;
+  }
+
+  const t = today();
+  box.innerHTML = list.map(item => {
+    const late = daysBetween(item.nextDate, t);  // 何日遅れか
+    const r = retention(item);
+    return `
+      <div class="review ${late > 0 ? 'overdue' : ''}">
+        <div class="name">${esc(item.name)}</div>
+        <div class="meta">
+          <span class="chip">${esc(item.category)}</span>
+          ${late > 0 ? `<span class="late">${late}日遅れ</span>` : '<span>今日が復習日</span>'}
+          <span>保持率 ${pct(r)}</span>
+          <span>復習${item.history.length + 1}回目</span>
+        </div>
+        ${item.memo ? `<p class="memo">${esc(item.memo)}</p>` : ''}
+        <div class="choices">
+          <button type="button" class="c-good" data-action="review" data-id="${item.id}" data-result="good">できた<small>次の間隔へ</small></button>
+          <button type="button" class="c-so" data-action="review" data-id="${item.id}" data-result="so">あいまい<small>同じ間隔</small></button>
+          <button type="button" class="c-bad" data-action="review" data-id="${item.id}" data-result="bad">忘れた<small>1日後から</small></button>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function renderList() {
+  const box = $('#itemList');
+  $('#itemCount').textContent = data.items.length ? `${data.items.length}件` : '';
+  if (!data.items.length) {
+    box.innerHTML = '<li><p class="empty">まだ項目がありません</p></li>';
+    return;
+  }
+  const t = today();
+  const sorted = [...data.items].sort((a, b) => retention(a) - retention(b));
+  box.innerHTML = sorted.map(item => {
+    const r = retention(item);
+    const until = daysBetween(t, item.nextDate);
+    const when = until > 0 ? `あと${until}日` : until === 0 ? '今日' : `${-until}日遅れ`;
+    return `
+      <li>
+        <div class="row1">
+          <details>
+            <summary>${esc(item.name)}</summary>
+            <p>${item.memo ? esc(item.memo) : '（メモなし）'}</p>
+            <p>初回学習日：${fmt(item.firstDate)}　復習回数：${item.history.length}回</p>
+          </details>
+          <div class="item-btns">
+            <button type="button" class="small-btn" data-action="graph" data-id="${item.id}">グラフ</button>
+            <button type="button" class="small-btn danger" data-action="delete" data-id="${item.id}" aria-label="${esc(item.name)}を削除">削除</button>
+          </div>
+        </div>
+        <div class="meter"><span style="width:${r * 100}%;background:${colorOf(r)}"></span></div>
+        <div class="row2">
+          <span><span class="chip">${esc(item.category)}</span>　保持率 <b>${pct(r)}</b>
+            ${r < THRESHOLD ? ' <span class="warn">そろそろ復習</span>' : ''}</span>
+          <span>次の復習 <b>${fmt(item.nextDate)}</b>（${when}）・間隔${INTERVALS[item.step]}日</span>
+        </div>
+      </li>`;
+  }).join('');
+}
+
+// グラフの横幅（画面の幅に合わせる）
+function chartWidth(el) { return Math.max(280, Math.round(el.clientWidth || 340)); }
+
+function renderCurve() {
+  const box = $('#curveBox');
+  const sel = $('#curveSelect');
+  if (!data.items.length) {
+    sel.innerHTML = '';
+    sel.disabled = true;
+    box.innerHTML = '<p class="empty">項目を登録するとグラフが表示されます</p>';
+    $('#curveInfo').textContent = '';
+    return;
+  }
+  sel.disabled = false;
+  if (!data.items.some(i => i.id === selectedId)) selectedId = (dueItems()[0] || data.items[0]).id;
+  sel.innerHTML = data.items.map(i => `<option value="${i.id}" ${i.id === selectedId ? 'selected' : ''}>${esc(i.name)}</option>`).join('');
+
+  const item = data.items.find(i => i.id === selectedId);
+  const t = today();
+  const W = chartWidth(box), H = 240, L = 36, R = 12, T = 12, B = 26;
+  const start = item.firstDate;
+  const end = addDays(t, 30);                 // 今日から30日先まで表示
+  const span = Math.max(1, daysBetween(start, end));
+  const nowD = daysBetween(start, t);
+  const x = d => L + (d / span) * (W - L - R);  // 日数 → 横の位置
+  const y = r => T + (1 - r) * (H - T - B);     // 保持率 → 縦の位置
+
+  // 学習した日の一覧（初回学習日 + 復習した日）
+  const events = [{ date: item.firstDate, step: 0 }, ...item.history];
+
+  // ある区間の曲線の点を作る
+  const points = (from, to, base, S) => {
+    const out = [];
+    const n = Math.max(2, Math.ceil((to - from) * 4));
+    for (let k = 0; k <= n; k++) {
+      const d = from + (to - from) * k / n;
+      out.push([x(d), y(Math.exp(-(d - base) / S))]);
+    }
+    return out;
+  };
+
+  let past = [], future = [], marks = '';
+  events.forEach((ev, i) => {
+    const s = daysBetween(start, ev.date);
+    const S = strengthOf(ev.step);
+    if (i < events.length - 1) {
+      past.push(...points(s, daysBetween(start, events[i + 1].date), s, S));
+    } else {
+      past.push(...points(s, nowD, s, S));       // 今日までは実線
+      future = points(nowD, span, s, S);          // これから先は点線（このまま復習しなかった場合）
+    }
+    if (i > 0) {
+      // 復習した瞬間の保持率に印をつける
+      const prev = events[i - 1];
+      const r = Math.exp(-(s - daysBetween(start, prev.date)) / strengthOf(prev.step));
+      marks += `<circle cx="${x(s)}" cy="${y(r)}" r="5" class="m-${ev.result}"><title>${fmt(ev.date)} ${RESULT_LABEL[ev.result]}（復習前の保持率 ${pct(r)}）</title></circle>`;
+    }
+  });
+
+  const toPath = pts => pts.map((p, i) => (i ? 'L' : 'M') + p[0].toFixed(1) + ',' + p[1].toFixed(1)).join(' ');
+  const all = [...past, ...future];
+  const area = `M${all[0][0]},${y(0)} ` + all.map(p => 'L' + p[0].toFixed(1) + ',' + p[1].toFixed(1)).join(' ') + ` L${all[all.length - 1][0]},${y(0)} Z`;
+
+  // 横軸の目盛り（日付）
+  let ticks = '';
+  for (let k = 0; k <= 4; k++) {
+    const d = Math.round(span * k / 4);
+    ticks += `<text class="g-text" x="${x(d)}" y="${H - 6}" text-anchor="${k === 0 ? 'start' : k === 4 ? 'end' : 'middle'}">${fmtShort(addDays(start, d))}</text>`;
+  }
+  const nextX = x(daysBetween(start, item.nextDate));
+
+  box.innerHTML = `
+  <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(item.name)}の忘却曲線">
+    <rect class="g-zone" x="${L}" y="${y(THRESHOLD)}" width="${W - L - R}" height="${y(0) - y(THRESHOLD)}"/>
+    <line class="g-axis" x1="${L}" y1="${y(0)}" x2="${W - R}" y2="${y(0)}"/>
+    <line class="g-axis" x1="${L}" y1="${y(1)}" x2="${W - R}" y2="${y(1)}"/>
+    <line class="g-axis" x1="${L}" y1="${y(0.5)}" x2="${W - R}" y2="${y(0.5)}" opacity=".5"/>
+    <text class="g-text" x="${L - 4}" y="${y(1) + 4}" text-anchor="end">100%</text>
+    <text class="g-text" x="${L - 4}" y="${y(0.5) + 4}" text-anchor="end">50%</text>
+    <text class="g-text" x="${L - 4}" y="${y(0) + 4}" text-anchor="end">0%</text>
+    <line class="g-th" x1="${L}" y1="${y(THRESHOLD)}" x2="${W - R}" y2="${y(THRESHOLD)}"/>
+    <text class="g-th-text" x="${W - R}" y="${y(THRESHOLD) + 14}" text-anchor="end">60% そろそろ復習</text>
+    <path class="g-area" d="${area}"/>
+    <path class="g-line" d="${toPath(past)}"/>
+    <path class="g-future" d="${toPath(future)}"/>
+    <line class="g-today" x1="${x(nowD)}" y1="${T}" x2="${x(nowD)}" y2="${y(0)}"/>
+    <text class="g-text" x="${x(nowD) + 4}" y="${T + 10}">今日</text>
+    <line class="g-next" x1="${nextX}" y1="${T + 16}" x2="${nextX}" y2="${y(0)}"/>
+    <text class="g-next-text" x="${nextX + 4}" y="${T + 28}">次の復習</text>
+    ${marks}
+    ${ticks}
+  </svg>`;
+
+  const r = retention(item);
+  $('#curveInfo').innerHTML =
+    `今の推定保持率 <b>${pct(r)}</b>　記憶の強さ <b>${strengthOf(item.step)}</b>（間隔${INTERVALS[item.step]}日）　次の復習 <b>${fmt(item.nextDate)}</b><br>
+     縦にまっすぐ上がっている所が復習した日です。点線は「このまま復習しなかった場合」。`;
+}
+
+// 記憶の強さごとの曲線をくらべるグラフ
+function renderCompare() {
+  const box = $('#compareBox');
+  const W = chartWidth(box.parentElement), H = 200, L = 36, R = 12, T = 10, B = 24;
+  const days = 45;
+  const x = d => L + (d / days) * (W - L - R);
+  const y = r => T + (1 - r) * (H - T - B);
+  let paths = '', dots = '', legend = '';
+  INTERVALS.forEach((iv, step) => {
+    const S = strengthOf(step);
+    const op = 0.3 + step * 0.175;  // 強いほど濃い色
+    let d = '';
+    for (let k = 0; k <= days * 2; k++) {
+      const t = k / 2;
+      d += (k ? 'L' : 'M') + x(t).toFixed(1) + ',' + y(Math.exp(-t / S)).toFixed(1);
+    }
+    paths += `<path d="${d}" fill="none" stroke="var(--accent)" stroke-width="2.5" opacity="${op}"/>`;
+    const cross = -S * Math.log(THRESHOLD); // 60%を下回る日
+    dots += `<circle cx="${x(cross)}" cy="${y(THRESHOLD)}" r="4" fill="var(--accent)" opacity="${op}"/>`;
+    legend += `<span><i style="opacity:${op}"></i>強さ${S}（約${Math.round(cross)}日で60%）</span>`;
+  });
+  box.innerHTML = `
+  <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="記憶の強さごとの忘却曲線">
+    <line class="g-axis" x1="${L}" y1="${y(0)}" x2="${W - R}" y2="${y(0)}"/>
+    <text class="g-text" x="${L - 4}" y="${y(1) + 4}" text-anchor="end">100%</text>
+    <text class="g-text" x="${L - 4}" y="${y(0) + 4}" text-anchor="end">0%</text>
+    <line class="g-th" x1="${L}" y1="${y(THRESHOLD)}" x2="${W - R}" y2="${y(THRESHOLD)}"/>
+    <text class="g-th-text" x="${L - 4}" y="${y(THRESHOLD) + 4}" text-anchor="end">60%</text>
+    ${paths}${dots}
+    ${[0, 15, 30, 45].map(d => `<text class="g-text" x="${x(d)}" y="${H - 6}" text-anchor="${d === 0 ? 'start' : d === 45 ? 'end' : 'middle'}">${d}日</text>`).join('')}
+  </svg>`;
+  $('#compareLegend').innerHTML = legend;
+}
+
+// 直近30日の棒グラフ
+function renderBars() {
+  const box = $('#barBox');
+  const W = chartWidth(box), H = 170, L = 24, R = 6, T = 14, B = 24;
+  const DAYS = 30;
+  const t = today();
+  const dates = Array.from({ length: DAYS }, (_, i) => addDays(t, i - DAYS + 1));
+  const counts = dates.map(d => data.log[d] || 0);
+  const max = Math.max(1, ...counts);
+  const bw = (W - L - R) / DAYS;
+  const y = v => T + (1 - v / max) * (H - T - B);
+
+  let bars = '', labels = '';
+  dates.forEach((d, i) => {
+    const c = counts[i];
+    const bx = L + i * bw;
+    if (c > 0) {
+      bars += `<rect class="g-bar ${d === t ? 'today' : ''}" x="${(bx + bw * 0.15).toFixed(1)}" y="${y(c)}" width="${(bw * 0.7).toFixed(1)}" height="${y(0) - y(c)}" rx="2"><title>${fmt(d)}：${c}回</title></rect>`;
+      if (bw >= 12) bars += `<text class="g-bar-num" x="${bx + bw / 2}" y="${y(c) - 3}">${c}</text>`;
+    }
+    if ((DAYS - 1 - i) % 7 === 0) {
+      labels += `<text class="g-text" x="${bx + bw / 2}" y="${H - 6}" text-anchor="middle">${d === t ? '今日' : fmtShort(d)}</text>`;
+    }
+  });
+  box.innerHTML = `
+  <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="直近30日の復習回数">
+    <line class="g-axis" x1="${L}" y1="${y(0)}" x2="${W - R}" y2="${y(0)}"/>
+    <line class="g-axis" x1="${L}" y1="${y(max)}" x2="${W - R}" y2="${y(max)}" opacity=".5"/>
+    <text class="g-text" x="${L - 4}" y="${y(max) + 4}" text-anchor="end">${max}</text>
+    <text class="g-text" x="${L - 4}" y="${y(0) + 4}" text-anchor="end">0</text>
+    ${bars}${labels}
+  </svg>`;
+  const total = counts.reduce((a, b) => a + b, 0);
+  const active = counts.filter(c => c > 0).length;
+  $('#barInfo').innerHTML = `30日間の合計 <b>${total}回</b>　復習した日 <b>${active}日</b>　今日 <b>${data.log[t] || 0}回</b>`;
+}
+
+function renderSettings() {
+  if (document.activeElement !== $('#sExam')) $('#sExam').value = data.settings.examName || '';
+  $('#sDate').value = data.settings.examDate || '';
+}
+
+/* ===========================================================
+   ダークモード
+   最初はスマホ・PCの設定に合わせ、ボタンで手動切替できます
+   =========================================================== */
+function isDark() {
+  if (data.settings.theme) return data.settings.theme === 'dark';
+  return window.matchMedia('(prefers-color-scheme: dark)').matches;
+}
+function applyTheme() {
+  if (data.settings.theme) document.documentElement.dataset.theme = data.settings.theme;
+  else delete document.documentElement.dataset.theme;
+  $('#themeBtn').textContent = isDark() ? '☀️ ライト' : '🌙 ダーク';
+}
+
+/* ===========================================================
+   サンプルデータ（動作確認用）
+   今日を基準に「過去にこう勉強していた」というデータを作ります
+   =========================================================== */
+function loadSample() {
+  if (data.items.length && !confirm('今のデータを消して、サンプルデータに置き換えます。よろしいですか？')) return;
+  const t = today();
+  const D = n => addDays(t, n);
+  // [項目名, 分野, メモ, 初回学習日（何日前）, [[復習した日, 理解度], ...]]
+  const defs = [
+    ['ネットワークの基礎', 'テクノロジ系', 'TCP/IPの4つの層、IPアドレス、DNSの役割', -20, [[-19, 'good'], [-16, 'good'], [-9, 'good']]],
+    ['情報セキュリティの3要素', 'テクノロジ系', '機密性・完全性・可用性（CIA）', -12, [[-11, 'good'], [-8, 'bad'], [-7, 'good']]],
+    ['著作権・個人情報保護法', 'ストラテジ系', '著作権は届け出なしで自動的に発生する', -8, [[-7, 'good'], [-4, 'so']]],
+    ['SWOT分析', 'ストラテジ系', '強み・弱み・機会・脅威の4つで分析', -4, [[-3, 'good']]],
+    ['プロジェクトマネジメント', 'マネジメント系', 'WBS、ガントチャート、クリティカルパス', -1, []],
+    ['データベース', 'テクノロジ系', '正規化、主キーと外部キー、SQLの基本', -40, [[-39, 'good'], [-36, 'good'], [-29, 'good'], [-15, 'good']]],
+    ['サービスマネジメント', 'マネジメント系', 'SLA（サービスの約束）、インシデント管理', 0, []]
+  ];
+  const fresh = emptyData();
+  fresh.settings = { ...data.settings };
+  defs.forEach(([name, cat, memo, first, reviews]) => {
+    const item = createItem(name, cat, memo, D(first));
+    reviews.forEach(([off, res]) => {
+      applyReview(item, res, D(off));
+      fresh.log[D(off)] = (fresh.log[D(off)] || 0) + 1;
+    });
+    fresh.items.push(item);
+  });
+  // ほかにも毎日少しずつ復習していた、という記録を足す（棒グラフとストリークの確認用）
+  for (let i = 1; i <= 25; i++) {
+    if (i === 10 || i === 18) continue; // サボった日
+    fresh.log[D(-i)] = (fresh.log[D(-i)] || 0) + ((i * 7) % 4) + 1;
+  }
+  data = fresh;
+  selectedId = null;
+  saveData();
+  render();
+  showToast('サンプルデータを入れました');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+/* ===========================================================
+   ボタンなどの操作
+   =========================================================== */
+let toastTimer;
+function showToast(msg) {
+  const el = $('#toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 2800);
+}
+
+// 登録フォーム
+$('#addForm').addEventListener('submit', e => {
+  e.preventDefault();
+  const name = $('#fName').value.trim();
+  if (!name) { $('#fName').focus(); return; }
+  const item = createItem(name, $('#fCat').value, $('#fMemo').value.trim(), today());
+  data.items.push(item);
+  saveData();
+  $('#fName').value = '';
+  $('#fMemo').value = '';
+  selectedId = item.id;
+  render();
+  showToast(`「${name}」を登録しました。最初の復習は ${fmt(item.nextDate)} です`);
+});
+
+// 画面の中のボタン（data-action がついたもの）をまとめて処理
+document.addEventListener('click', e => {
+  const btn = e.target.closest('[data-action]');
+  if (!btn) return;
+  const id = btn.dataset.id;
+  const action = btn.dataset.action;
+  if (action === 'review') reviewItem(id, btn.dataset.result);
+  if (action === 'sample') loadSample();
+  if (action === 'graph') {
+    selectedId = id;
+    renderCurve();
+    $('#curveCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+  if (action === 'delete') {
+    const item = data.items.find(i => i.id === id);
+    if (item && confirm(`「${item.name}」を削除しますか？（元に戻せません）`)) {
+      data.items = data.items.filter(i => i.id !== id);
+      saveData();
+      render();
+    }
+  }
+});
+
+$('#curveSelect').addEventListener('change', e => { selectedId = e.target.value; renderCurve(); });
+
+$('#themeBtn').addEventListener('click', () => {
+  data.settings.theme = isDark() ? 'light' : 'dark';
+  saveData();
+  applyTheme();
+});
+
+$('#sExam').addEventListener('input', e => { data.settings.examName = e.target.value; saveData(); renderStats(); });
+$('#sDate').addEventListener('change', e => { data.settings.examDate = e.target.value; saveData(); renderStats(); });
+$('#sampleBtn').addEventListener('click', loadSample);
+
+$('#clearBtn').addEventListener('click', () => {
+  if (!confirm('すべての学習項目と記録を削除します。元に戻せません。よろしいですか？')) return;
+  const settings = data.settings;
+  data = emptyData();
+  data.settings = settings;
+  saveData();
+  render();
+  showToast('すべてのデータを削除しました');
+});
+
+// バックアップ（ファイルに書き出す）
+$('#exportBtn').addEventListener('click', () => {
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `wasurena-backup-${today()}.json`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+});
+// バックアップから戻す
+$('#importBtn').addEventListener('click', () => $('#importFile').click());
+$('#importFile').addEventListener('change', e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const d = JSON.parse(reader.result);
+      if (!Array.isArray(d.items)) throw new Error();
+      if (!confirm(`${d.items.length}件の項目を読み込みます。今のデータは置き換わります。よろしいですか？`)) return;
+      data = { settings: { ...emptyData().settings, ...d.settings }, items: d.items, log: d.log || {} };
+      saveData();
+      render();
+      showToast('バックアップから戻しました');
+    } catch (err) {
+      showToast('このファイルは読み込めませんでした');
+    }
+    e.target.value = '';
+  };
+  reader.readAsText(file);
+});
+
+// 画面の幅が変わったらグラフを描き直す
+let resizeTimer;
+window.addEventListener('resize', () => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => { renderCurve(); renderCompare(); renderBars(); }, 150);
+});
+// スマホ・PCのダークモード設定が変わったとき
+window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applyTheme);
+// 日付が変わったあとに画面に戻ってきたとき、表示を最新にする
+document.addEventListener('visibilitychange', () => { if (!document.hidden) render(); });
+
+// 最初の表示
+render();
+
+// アプリとして動かす仕組み（オフライン対応）を登録する
+// ※ インターネット上に置いたとき（https）だけ動きます
+if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+}
+</script>
+</body>
+</html>
